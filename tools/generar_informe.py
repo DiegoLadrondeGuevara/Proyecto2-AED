@@ -140,7 +140,7 @@ parrafo("Prof. Wilder Nina Choquehuayta", False, True, 11, GRIS, espacio=40)
 parrafo("Proyecto Final 2 — Anima tu Algoritmo", True, True, 16)
 parrafo("Ciclo Euleriano", True, True, 28, AZUL, espacio=2)
 parrafo("Algoritmo de Hierholzer en O(|V| + |E|)", False, True, 14, GRIS, espacio=40)
-parrafo("Integrantes", True, True, 12)
+parrafo("Integrante" if len(INTEGRANTES) == 1 else "Integrantes", True, True, 12)
 for n in INTEGRANTES:
     parrafo(n, False, True, 12, espacio=2)
 doc.add_paragraph()
@@ -255,8 +255,10 @@ parrafo("Caso borde / peor caso: si el grafo no es euleriano (Königsberg o un g
 doc.add_heading("5. Evidencia", 1)
 p = parrafo("Repositorio: ")
 enlace(p, REPO)
-p = parrafo("Video (MP4, 1080p): ")
-enlace(p, VIDEO)
+p = parrafo("Escenas animadas con Manim (MP4, 1080p): ")
+enlace(p, REPO + "/tree/main/video")
+parrafo("Video final narrado (PPT + escenas): [AGREGAR ENLACE DE DRIVE / YOUTUBE NO LISTADO]",
+        negrita=True, color=RGBColor(0xC0, 0x30, 0x30))
 imagen("verificacion.png", "Figura 1. Verificación de grados (g) y DFS de conexidad sobre el grafo principal.")
 imagen("hierholzer_medio.png", "Figura 2. Hierholzer a mitad de ejecución: camino actual en amarillo, aristas ya "
                                "fijadas en el ciclo en verde, pila a la derecha y ciclo en construcción abajo.")
@@ -265,13 +267,18 @@ imagen("konigsberg.png", "Figura 4. Caso borde: los puentes de Königsberg tiene
 imagen("desconectado.png", "Figura 5. Caso borde: grados pares pero aristas en dos componentes.")
 
 # ------------------------------------------------------------------ 6
-doc.add_heading("6. Contribuciones de cada integrante", 1)
+doc.add_heading("6. Contribuciones", 1)
 filas = [["Integrante", "Contribución"]]
-roles = ["Implementación en C++ (Pila, Lista, GrafoEuleriano, Hierholzer) y pruebas",
-         "Animación en Manim, guion y edición del video",
-         "Informe, presentación y README"]
-for i, n in enumerate(INTEGRANTES):
-    filas.append([n, roles[i] if i < len(roles) else "Revisión general"])
+if len(INTEGRANTES) == 1:
+    filas.append([INTEGRANTES[0], "Trabajo individual: implementación en C++ (Pila, Lista, GrafoEuleriano, "
+                                  "Hierholzer), pruebas, animación en Manim, video narrado, informe, "
+                                  "presentación y README (100 %)"])
+else:
+    roles = ["Implementación en C++ (Pila, Lista, GrafoEuleriano, Hierholzer) y pruebas",
+             "Animación en Manim, guion y edición del video",
+             "Informe, presentación y README"]
+    for i, n in enumerate(INTEGRANTES):
+        filas.append([n, roles[i] if i < len(roles) else "Revisión general"])
 tabla(filas, [6, 9.5])
 
 # ------------------------------------------------------------------ 7

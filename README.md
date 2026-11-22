@@ -6,9 +6,9 @@ programa (la animación lee una traza de eventos generada por el C++; no calcula
 
 > **Curso:** CS2023 – Algoritmos y Estructuras de Datos · UTEC · 2026-2
 >
-> **Integrantes:** ver [`integrantes.txt`](integrantes.txt) (es el mismo archivo que usa el video).
+> **Integrante:** Diego Abraham Ladrón de Guevara
 
-**Video final:** [`video/CicloEuleriano.mp4`](video/CicloEuleriano.mp4) (1080p, ≈ 2 min 36 s)
+**Escenas animadas (mini videos, 1080p):** carpeta [`video/`](video/) — una por escena (`Portada`, `Introduccion`, `Verificacion`, `Hierholzer`, `CasoBorde`, `Complejidad`, `Creditos`); se usan dentro de la presentación narrada.
 
 ## ¿Qué hay en el repo?
 
