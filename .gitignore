@@ -1,0 +1,10 @@
+# Ejecutables
+*.exe
+euler
+pruebas
+*.o
+
+# Salida intermedia de Manim (los videos finales se copian a video/)
+media/
+__pycache__/
+.venv*/
