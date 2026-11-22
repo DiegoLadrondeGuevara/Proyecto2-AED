@@ -8,3 +8,5 @@ pruebas
 media/
 __pycache__/
 .venv*/
+node_modules/
+presentacion/package-lock.json
