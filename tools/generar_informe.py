@@ -1,4 +1,5 @@
-"""Genera docs/Informe_Ciclo_Euleriano.docx (luego se convierte a PDF con LibreOffice).
+"""Genera docs/Informe_Ciclo_Euleriano.docx con el mismo formato del informe del Proyecto 1
+(portada UTEC en Times New Roman, cuerpo en Arial, tablas con cabecera azul, bloques grises).
 
     python tools/generar_informe.py
     soffice --headless --convert-to pdf --outdir docs docs/Informe_Ciclo_Euleriano.docx
@@ -16,52 +17,86 @@ RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 IMG = os.path.join(RAIZ, "docs", "img")
 SALIDA = os.path.join(RAIZ, "docs", "Informe_Ciclo_Euleriano.docx")
 REPO = "https://github.com/DiegoLadrondeGuevara/Proyecto2-AED"
-VIDEO = REPO + "/blob/main/video/CicloEuleriano.mp4"
+ESCENAS = REPO + "/tree/main/video"
+# Enlace al video narrado (Drive / YouTube no listado). Si queda vacío se marca en rojo.
+VIDEO_URL = ""
 
 with open(os.path.join(RAIZ, "integrantes.txt"), encoding="utf-8") as f:
     INTEGRANTES = [l.strip() for l in f if l.strip()]
 
-AZUL = RGBColor(0x1F, 0x3B, 0x5C)
-GRIS = RGBColor(0x55, 0x5F, 0x6B)
+NEGRO = RGBColor(0, 0, 0)
+GRIS = RGBColor(0x55, 0x55, 0x55)
+AZUL_TABLA = "3C78D8"
+GRIS_BLOQUE = "F2F2F2"
+BORDE = "BFBFBF"
+CUERPO = "Arial"
+PORTADA = "Times New Roman"
 
 doc = Document()
 for s in doc.sections:
-    s.top_margin = s.bottom_margin = Cm(2.2)
-    s.left_margin = s.right_margin = Cm(2.4)
-estilo = doc.styles["Normal"]
-estilo.font.name = "Calibri"
-estilo.font.size = Pt(11)
+    s.top_margin = s.bottom_margin = Cm(2.54)
+    s.left_margin = s.right_margin = Cm(2.54)
+
+
+def fuente(estilo_o_run, nombre):
+    estilo_o_run.font.name = nombre
+    rpr = estilo_o_run.element.get_or_add_rPr() if hasattr(estilo_o_run.element, "get_or_add_rPr") \
+        else estilo_o_run._element.get_or_add_rPr()
+    rf = rpr.find(qn("w:rFonts"))
+    if rf is None:
+        rf = OxmlElement("w:rFonts")
+        rpr.append(rf)
+    for a in ("w:ascii", "w:hAnsi", "w:eastAsia", "w:cs"):
+        rf.set(qn(a), nombre)
+
+
+normal = doc.styles["Normal"]
+fuente(normal, CUERPO)
+normal.font.size = Pt(11)
+normal.paragraph_format.line_spacing = 1.15
 for nivel, tam in ((1, 15), (2, 12.5)):
     h = doc.styles[f"Heading {nivel}"]
-    h.font.name = "Calibri"
+    fuente(h, CUERPO)
     h.font.size = Pt(tam)
-    h.font.color.rgb = AZUL
+    h.font.bold = True
+    h.font.italic = False
+    h.font.color.rgb = NEGRO
+    h.paragraph_format.space_before = Pt(14 if nivel == 1 else 10)
+    h.paragraph_format.space_after = Pt(4)
 
 
-def parrafo(texto, negrita=False, centro=False, tam=None, color=None, italica=False, espacio=6):
+# ------------------------------------------------------------------ utilidades
+def parrafo(partes, centro=False, justificar=True, espacio=6, tam=None, fnt=None, color=None):
+    """partes: texto o lista de (texto, negrita)."""
+    if isinstance(partes, str):
+        partes = [(partes, False)]
     p = doc.add_paragraph()
-    r = p.add_run(texto)
-    r.bold = negrita
-    r.italic = italica
-    if tam:
-        r.font.size = Pt(tam)
-    if color:
-        r.font.color.rgb = color
+    for texto, negrita in partes:
+        r = p.add_run(texto)
+        r.bold = negrita
+        if tam:
+            r.font.size = Pt(tam)
+        if fnt:
+            fuente(r, fnt)
+        if color:
+            r.font.color.rgb = color
     if centro:
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    elif justificar:
+        p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
     p.paragraph_format.space_after = Pt(espacio)
     return p
 
 
-def vinetas(items):
-    for it in items:
-        p = doc.add_paragraph(style="List Bullet")
+def vinetas(items, numeradas=False):
+    for i, it in enumerate(items, 1):
+        p = doc.add_paragraph(style="List Number" if numeradas else "List Bullet")
         if isinstance(it, tuple):
             p.add_run(it[0]).bold = True
             p.add_run(it[1])
         else:
             p.add_run(it)
-        p.paragraph_format.space_after = Pt(2)
+        p.paragraph_format.space_after = Pt(3)
 
 
 def sombrear(celda, color):
@@ -73,41 +108,86 @@ def sombrear(celda, color):
     tcPr.append(shd)
 
 
+def bordes(tabla_, color):
+    tblPr = tabla_._tbl.tblPr
+    b = OxmlElement("w:tblBorders")
+    for lado in ("top", "left", "bottom", "right", "insideH", "insideV"):
+        e = OxmlElement(f"w:{lado}")
+        e.set(qn("w:val"), "single")
+        e.set(qn("w:sz"), "4")
+        e.set(qn("w:color"), color)
+        b.append(e)
+    tblPr.append(b)
+
+
+def anchos_tabla(t, anchos):
+    """Fija anchos reales (Word y LibreOffice) y centra la tabla."""
+    t.autofit = False
+    tblPr = t._tbl.tblPr
+    w = OxmlElement("w:tblW")
+    w.set(qn("w:w"), str(int(sum(anchos) / 2.54 * 1440)))
+    w.set(qn("w:type"), "dxa")
+    tblPr.append(w)
+    jc = OxmlElement("w:jc")
+    jc.set(qn("w:val"), "center")
+    tblPr.append(jc)
+    mar = OxmlElement("w:tblCellMar")
+    for lado, v in (("top", 50), ("bottom", 50), ("left", 100), ("right", 100)):
+        e = OxmlElement(f"w:{lado}")
+        e.set(qn("w:w"), str(v))
+        e.set(qn("w:type"), "dxa")
+        mar.append(e)
+    tblPr.append(mar)
+    for gc, a in zip(t._tbl.tblGrid.findall(qn("w:gridCol")), anchos):
+        gc.set(qn("w:w"), str(int(a / 2.54 * 1440)))
+    for fila in t.rows:
+        for c, a in zip(fila.cells, anchos):
+            c.width = Cm(a)
+
+
 def tabla(filas, anchos):
     t = doc.add_table(rows=len(filas), cols=len(filas[0]))
-    t.style = "Table Grid"
-    t.alignment = WD_TABLE_ALIGNMENT.CENTER
+    bordes(t, BORDE)
+    anchos_tabla(t, anchos)
     for i, fila in enumerate(filas):
         for j, txt in enumerate(fila):
             c = t.cell(i, j)
             c.width = Cm(anchos[j])
-            c.text = ""
-            r = c.paragraphs[0].add_run(txt)
+            p = c.paragraphs[0]
+            p.paragraph_format.space_after = Pt(0)
+            p.paragraph_format.line_spacing = 1.0
+            r = p.add_run(txt)
             r.font.size = Pt(10)
             if i == 0:
                 r.bold = True
                 r.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
-                sombrear(c, "1F3B5C")
-    doc.add_paragraph().paragraph_format.space_after = Pt(2)
+                sombrear(c, AZUL_TABLA)
+    doc.add_paragraph().paragraph_format.space_after = Pt(0)
 
 
-def codigo(texto):
-    p = doc.add_paragraph()
+def bloque(texto):
+    """Bloque gris con Consolas, como la salida de consola del Proyecto 1."""
+    t = doc.add_table(rows=1, cols=1)
+    t.alignment = WD_TABLE_ALIGNMENT.CENTER
+    anchos_tabla(t, [15.9])
+    c = t.rows[0].cells[0]
+    sombrear(c, GRIS_BLOQUE)
+    p = c.paragraphs[0]
+    p.paragraph_format.space_after = Pt(0)
+    p.paragraph_format.line_spacing = 1.0
     r = p.add_run(texto)
-    r.font.name = "Consolas"
-    r.font.size = Pt(9)
-    p.paragraph_format.left_indent = Cm(0.6)
-    p.paragraph_format.space_after = Pt(6)
+    fuente(r, "Consolas")
+    r.font.size = Pt(9.5)
+    doc.add_paragraph().paragraph_format.space_after = Pt(0)
 
 
-def imagen(nombre, pie, ancho=15.5):
-    ruta = os.path.join(IMG, nombre)
-    if not os.path.exists(ruta):
-        parrafo(f"[falta imagen {nombre}]", color=GRIS)
-        return
-    doc.add_picture(ruta, width=Cm(ancho))
+def imagen(nombre, pie, ancho=14.5):
+    doc.add_picture(os.path.join(IMG, nombre), width=Cm(ancho))
     doc.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.CENTER
-    parrafo(pie, centro=True, tam=9, color=GRIS, italica=True)
+    doc.paragraphs[-1].paragraph_format.space_after = Pt(2)
+    p = parrafo(pie, centro=True, tam=9.5, color=GRIS, espacio=10)
+    for r in p.runs:
+        r.italic = True
 
 
 def enlace(parr, url, texto=None):
@@ -117,12 +197,12 @@ def enlace(parr, url, texto=None):
     h.set(qn("r:id"), rid)
     run = OxmlElement("w:r")
     rpr = OxmlElement("w:rPr")
+    b = OxmlElement("w:b")
     col = OxmlElement("w:color")
-    col.set(qn("w:val"), "1F5FBF")
+    col.set(qn("w:val"), "1155CC")
     u = OxmlElement("w:u")
     u.set(qn("w:val"), "single")
-    rpr.append(col)
-    rpr.append(u)
+    rpr.extend([b, col, u])
     run.append(rpr)
     t = OxmlElement("w:t")
     t.text = texto or url
@@ -131,221 +211,199 @@ def enlace(parr, url, texto=None):
     parr._p.append(h)
 
 
-# ------------------------------------------------------------------ caratula
-for _ in range(3):
-    doc.add_paragraph()
-parrafo("UNIVERSIDAD DE INGENIERÍA Y TECNOLOGÍA — UTEC", True, True, 13, AZUL)
-parrafo("CS2023 · Algoritmos y Estructuras de Datos · 2026-2", False, True, 12)
-parrafo("Prof. Wilder Nina Choquehuayta", False, True, 11, GRIS, espacio=40)
-parrafo("Proyecto Final 2 — Anima tu Algoritmo", True, True, 16)
-parrafo("Ciclo Euleriano", True, True, 28, AZUL, espacio=2)
-parrafo("Algoritmo de Hierholzer en O(|V| + |E|)", False, True, 14, GRIS, espacio=40)
-parrafo("Integrante" if len(INTEGRANTES) == 1 else "Integrantes", True, True, 12)
-for n in INTEGRANTES:
-    parrafo(n, False, True, 12, espacio=2)
+# ------------------------------------------------------------------ portada
+def linea_portada(partes, tam, espacio=6):
+    return parrafo(partes, centro=True, espacio=espacio, tam=tam, fnt=PORTADA)
+
+
 doc.add_paragraph()
-parrafo("Estructura asignada: 2. Ciclo euleriano", False, True, 11, GRIS)
-parrafo("Lima, noviembre de 2026", False, True, 11, GRIS)
+linea_portada([("UNIVERSIDAD DE INGENIERÍA Y TECNOLOGÍA", True)], 14, 4)
+linea_portada("“Año de la Esperanza y el Fortalecimiento de la Democracia”", 11, 30)
+doc.add_picture(os.path.join(IMG, "logo_utec.png"), width=Cm(7.2))
+doc.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.CENTER
+doc.paragraphs[-1].paragraph_format.space_after = Pt(28)
+linea_portada([("Proyecto 2: Ciclo Euleriano", True)], 14)
+linea_portada([("Curso: ", True), ("Algoritmos y Estructuras de Datos", False)], 14)
+linea_portada([("Docente: ", True), ("Wilder Nina Choquehuayta", False)], 14, 30)
+
+t = doc.add_table(rows=1 + len(INTEGRANTES), cols=1)
+t.alignment = WD_TABLE_ALIGNMENT.CENTER
+bordes(t, "000000")
+anchos_tabla(t, [9.5])
+for i, txt in enumerate(["Integrante" if len(INTEGRANTES) == 1 else "Integrantes"] + INTEGRANTES):
+    c = t.cell(i, 0)
+    c.width = Cm(9.5)
+    p = c.paragraphs[0]
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p.paragraph_format.space_before = Pt(3)
+    p.paragraph_format.space_after = Pt(3)
+    r = p.add_run(txt)
+    r.bold = True
+    fuente(r, PORTADA)
+    r.font.size = Pt(11)
+for _ in range(4):
+    doc.add_paragraph()
+linea_portada([("Lima - Perú", True)], 11)
+linea_portada([("2026", True)], 11, 0)
 doc.add_page_break()
 
+# ------------------------------------------------------------------ enlaces
+p = doc.add_paragraph()
+r = p.add_run("Enlaces del proyecto")
+r.bold = True
+r.font.size = Pt(23)
+p.paragraph_format.space_after = Pt(6)
+pv = doc.add_paragraph(style="List Bullet")
+pv.add_run("Repositorio : ").bold = True
+enlace(pv, REPO + ".git")
+pv = doc.add_paragraph(style="List Bullet")
+pv.add_run("Video: ").bold = True
+if VIDEO_URL:
+    enlace(pv, VIDEO_URL)
+else:
+    r = pv.add_run("[PEGAR ENLACE DEL VIDEO NARRADO]")
+    r.bold = True
+    r.font.color.rgb = RGBColor(0xC0, 0x30, 0x30)
+pv = doc.add_paragraph(style="List Bullet")
+pv.add_run("Escenas de Manim (MP4, 1080p): ").bold = True
+enlace(pv, ESCENAS)
+
 # ------------------------------------------------------------------ 1
-doc.add_heading("1. Descripción del algoritmo", 1)
-parrafo("Un ciclo euleriano es un recorrido cerrado que pasa por todas las aristas de un grafo exactamente "
-        "una vez (los vértices sí pueden repetirse). El problema nace con los siete puentes de Königsberg, "
-        "que Euler resolvió en 1736 demostrando que no existía tal recorrido.")
-parrafo("No se trata de una estructura de datos sino de un algoritmo sobre la estructura grafo "
-        "(TDA Grafo: vértices, aristas y relación de adyacencia). Su objetivo es responder: ¿existe un "
-        "recorrido cerrado que use cada arista una sola vez? y, si existe, construirlo.")
-doc.add_heading("Teorema de Euler (grafo no dirigido)", 2)
-parrafo("Un grafo tiene un ciclo euleriano si y solo si (1) todos sus vértices tienen grado par y (2) "
-        "todos los vértices con al menos una arista pertenecen a una misma componente conexa. La intuición: "
-        "cada vez que el recorrido entra a un vértice por una arista debe salir por otra, así que las "
-        "aristas de cada vértice se consumen de a pares.")
-doc.add_heading("Algoritmo de Hierholzer (1873)", 2)
-vinetas([
-    ("Paso 1. ", "Se parte de un vértice con aristas y se camina por aristas no usadas, marcándolas, hasta "
-                 "atascarse (por el teorema, esto solo ocurre al volver al inicio del sub-ciclo)."),
-    ("Paso 2. ", "Al atascarse en v, v se saca de la pila y se agrega al ciclo final."),
-    ("Paso 3. ", "Si el nuevo tope de la pila aún tiene aristas libres, desde ahí se recorre un sub-ciclo "
-                 "que queda empalmado en ese punto del ciclo. Se repite hasta vaciar la pila."),
-])
-parrafo("Versión iterativa implementada:")
-codigo("pila.push(inicio)\n"
-       "mientras pila no vacía:\n"
-       "    v = pila.tope()\n"
-       "    saltar en ady[v] las aristas ya usadas (puntero siguiente[v])\n"
-       "    si queda una arista (v, w):  marcarla usada;  pila.push(w)      -> AVANZA\n"
-       "    si no:                       pila.pop();  ciclo.agregarInicio(v) -> RETROCEDE")
-parrafo("Usos en la práctica: planificación de rutas que deben cubrir todas las calles (recolección de basura, "
-        "correo, inspección de redes: problema del cartero chino), ensamblaje de genomas con grafos de De "
-        "Bruijn, trazado de circuitos/plotters sin levantar el cabezal y generación de secuencias de De Bruijn.")
+doc.add_heading("1. Descripción de la estructura y TDA", 1)
+parrafo([("Un ", False), ("ciclo euleriano", True), (" es un recorrido cerrado que pasa por ", False),
+         ("todas las aristas de un grafo exactamente una vez", True),
+         ("; los vértices sí pueden repetirse. El problema nace con los siete puentes de Königsberg, que Euler "
+          "resolvió en 1736 demostrando que no existía tal recorrido.", False)])
+parrafo([("No es una estructura en sí, sino un algoritmo sobre el ", False), ("TDA Grafo", True),
+         (" (vértices, aristas y relación de adyacencia). La implementación trabaja sobre un multigrafo no "
+          "dirigido, que admite lazos y aristas paralelas, y responde dos preguntas: ¿existe el ciclo? y, si "
+          "existe, ¿cuál es?", False)])
+parrafo([("Teorema de Euler: ", True),
+         ("un grafo tiene ciclo euleriano si y solo si todos sus vértices tienen grado par y todas las aristas "
+          "están en una misma componente conexa. Cada vez que el recorrido entra a un vértice debe salir por "
+          "otra arista, así que las aristas de cada vértice se consumen de a pares.", False)])
+parrafo([("Usos en la práctica: ", True),
+         ("rutas que deben cubrir todas las calles (recolección de basura, correo: problema del cartero chino), "
+          "ensamblaje de genomas con grafos de De Bruijn y trazado de circuitos o plotters sin levantar el "
+          "cabezal.", False)])
 
 # ------------------------------------------------------------------ 2
 doc.add_heading("2. Implementación", 1)
-parrafo("Toda la lógica está en C++17 y fue programada por el grupo; no se usan std::stack, std::vector ni "
-        "librerías de grafos en el algoritmo:")
-vinetas([
-    ("Pila<T> ", "(src/estructuras/Pila.h): pila enlazada, push/pop/tope en O(1). La usan Hierholzer y el DFS de conexidad."),
-    ("Lista<T> ", "(src/estructuras/Lista.h): lista enlazada con inserción al inicio y al final en O(1). "
-                  "Se usa para las listas de adyacencia y para construir el ciclo."),
-    ("GrafoEuleriano ", "(src/GrafoEuleriano.h/.cpp): multigrafo no dirigido (admite lazos y aristas paralelas). "
-                        "Cada arista tiene un id; la lista de adyacencia guarda pares (arista, vecino) y un arreglo "
-                        "usada[e] evita recorrer dos veces la misma arista desde sus dos extremos."),
-    ("verificar() ", "comprueba el teorema: grados pares y conexidad con un DFS iterativo."),
-    ("cicloEuleriano() ", "ejecuta Hierholzer y, si se activa la traza, escribe un evento por cada paso."),
-])
-doc.add_heading("Animación impulsada por la implementación real", 2)
-parrafo("Igual que en el Proyecto 1, el programa C++ escribe una traza de eventos (GRADO, CONEXO_VISITA, "
-        "PUSH, AVANZA, RETROCEDE, CICLO, …) y la escena de Manim solo la lee y la reproduce: el dibujo de la "
-        "pila, el color de cada arista y el orden del ciclo salen de la traza. Si se cambia el grafo de "
-        "entrada y se vuelve a ejecutar, la animación cambia sola.")
-codigo("./euler grafos/principal.txt -t trazas/principal.txt\n"
-       "Grados: 0:2 1:2 2:4 3:2 4:4 5:2 6:2\n"
-       "Ciclo euleriano (10 vertices, 9 aristas):\n"
-       "  0 -> 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 4 -> 2 -> 0")
-doc.add_heading("Pruebas", 2)
-parrafo("tests/pruebas.cpp realiza 12 591 verificaciones (0 fallos): 3000 multigrafos eulerianos aleatorios "
-        "(el ciclo debe ser cerrado, tener |E|+1 vértices y usar cada arista exactamente una vez), 3000 grafos "
-        "cualesquiera cuyo veredicto se compara con un chequeo independiente basado en union-find, y casos "
-        "borde: un vértice sin aristas, un lazo, aristas paralelas, una sola arista y un ciclo de 200 000 "
-        "vértices (la versión iterativa no desborda la pila de llamadas).")
+parrafo("Todo está en C++17 y fue programado por el grupo; el algoritmo no usa std::stack, std::vector ni "
+        "librerías de grafos.")
+tabla([["Estructura propia", "Archivo", "Uso dentro del algoritmo"],
+       ["Pila<T> (enlazada)", "estructuras/Pila.h", "Camino actual de Hierholzer y DFS de conexidad sin recursión"],
+       ["Lista<T> (enlazada)", "estructuras/Lista.h", "Listas de adyacencia y ciclo resultante (inserción al inicio en O(1))"],
+       ["GrafoEuleriano", "GrafoEuleriano.h/.cpp", "Multigrafo con id por arista, arreglo usada[e], verificación "
+                                                    "del teorema, Hierholzer y escritura de la traza"]],
+      [3.8, 4.0, 8.1])
+
+doc.add_heading("2.1 Verificación", 2)
+parrafo("verificar() calcula el grado de cada vértice (tamaño de su lista de adyacencia) y luego hace un DFS "
+        "iterativo desde un vértice con aristas. El veredicto puede ser:")
+vinetas([("EULERIANO: ", "grados pares y una sola componente con aristas."),
+         ("GRADOS_IMPARES: ", "algún vértice tiene grado impar (por ejemplo, Königsberg)."),
+         ("DESCONECTADO: ", "grados pares, pero las aristas están en dos o más componentes."),
+         ("SIN_ARISTAS: ", "el ciclo es trivial: un solo vértice.")])
+
+doc.add_heading("2.2 Algoritmo de Hierholzer", 2)
+parrafo("Versión iterativa con la pila propia. En cada paso se mira el vértice v del tope:")
+vinetas([("Caso A: v tiene una arista libre (v, w): ", "se marca como usada, se apila w y se continúa (evento AVANZA)."),
+         ("Caso B: v no tiene aristas libres: ", "se desapila y se agrega al inicio del ciclo (evento RETROCEDE). "
+                                                  "Si el nuevo tope aún tiene aristas, desde ahí nace un sub-ciclo "
+                                                  "que queda empalmado automáticamente.")])
+parrafo("Un puntero siguiente[v] recuerda hasta dónde se revisó la lista de v, así que nunca se vuelve a mirar "
+        "una arista ya usada. Para el grafo principal (7 vértices, 9 aristas) el resultado es "
+        "0 → 1 → 2 → 3 → 4 → 5 → 6 → 4 → 2 → 0.")
+
+doc.add_heading("2.3 Animación impulsada por la implementación", 2)
+parrafo([("Para que la animación sea real y no simulada, el programa escribe un ", False),
+         ("archivo de traza", True),
+         (" con cada paso ejecutado (GRADO, CONEXO_VISITA, PUSH, AVANZA, RETROCEDE, CICLO, etc.). El script de "
+          "Manim (animacion/escena.py) no contiene lógica del algoritmo: solo lee esa traza y dibuja los eventos "
+          "en el orden en que ocurrieron. Si se cambia el grafo de entrada, la animación cambia sola.", False)])
 
 # ------------------------------------------------------------------ 3
-doc.add_heading("3. Herramientas y pasos para reproducir el video", 1)
-tabla([["Herramienta", "Uso"],
-       ["C++17 · g++ 15 (MSYS2 UCRT64)", "algoritmo, pruebas y generación de trazas"],
-       ["Python 3.13 + Manim Community 0.21", "animación (escena.py)"],
-       ["FFmpeg", "unir las escenas en un solo MP4"],
-       ["Git + GitHub", "control de versiones y entrega"]], [6.5, 9])
-codigo("g++ -std=c++17 -O2 -o euler src/main.cpp src/GrafoEuleriano.cpp\n"
-       "./euler grafos/principal.txt   -t trazas/principal.txt\n"
-       "./euler grafos/konigsberg.txt  -t trazas/konigsberg.txt\n"
-       "./euler grafos/desconectado.txt -t trazas/desconectado.txt\n"
-       "./euler grafos/un_vertice.txt  -t trazas/un_vertice.txt\n"
-       "manim -qh animacion/escena.py Portada Introduccion Verificacion Hierholzer CasoBorde Complejidad Creditos\n"
-       "# En Windows, todo lo anterior + unir el video:  .\\ejecutar.ps1")
-doc.add_heading("Contenido del video (≈ 2 min 36 s, 1080p)", 2)
-tabla([["Escena", "Contenido", "Requisito de la rúbrica"],
-       ["Portada", "título, curso e integrantes", "título y nombres"],
-       ["Introducción", "definición, usos, teorema de Euler, idea de Hierholzer", "introducción conceptual"],
-       ["Verificación", "grados y DFS de conexidad sobre el grafo principal", "demostración animada"],
-       ["Hierholzer", "pila, aristas usadas, sub-ciclos empalmados y recorrido final", "demostración animada"],
-       ["Casos borde", "Königsberg (grados impares), grafo desconectado, un solo vértice", "caso borde"],
-       ["Complejidad", "tabla de costos y comparación con Fleury", "análisis de complejidad"],
-       ["Créditos", "integrantes y herramientas", "nombres"]], [3, 8, 4.5])
+doc.add_heading("3. Análisis de complejidad", 1)
+parrafo("Sea V el número de vértices y E el número de aristas.")
+tabla([["Operación", "Tiempo", "Justificación"],
+       ["Leer el grafo", "O(V + E)", "Cada arista se inserta en dos listas en O(1)."],
+       ["Grados", "O(V)", "El grado es el tamaño de la lista de adyacencia."],
+       ["Conexidad (DFS)", "O(V + E)", "Cada vértice se apila una vez y cada lista se recorre una vez."],
+       ["Hierholzer", "O(V + E)", "Cada arista se marca una vez y siguiente[v] solo avanza: se revisan 2E "
+                                  "incidencias, con E+1 push y E+1 pop."],
+       ["Fleury (comparación)", "O(E²)", "Antes de cada paso comprueba si la arista es puente. No implementado."],
+       ["Memoria", "O(V + E)", "Listas de adyacencia, arreglo usada[], pila y ciclo."]],
+      [4.0, 2.6, 9.3])
+parrafo([("Peor caso: ", True),
+         ("si el grafo no es euleriano, la verificación lo detecta en O(V + E) y Hierholzer no se ejecuta. El "
+          "tiempo lineal es óptimo, porque la salida misma tiene E + 1 vértices.", False)])
 
 # ------------------------------------------------------------------ 4
-doc.add_heading("4. Análisis de complejidad", 1)
-tabla([["Paso", "Tiempo", "Justificación"],
-       ["Leer el grafo", "O(V + E)", "cada arista se inserta en dos listas en O(1)"],
-       ["Grados", "O(V)", "el grado es el tamaño de la lista de adyacencia"],
-       ["Conexidad", "O(V + E)", "DFS iterativo: cada vértice se apila una vez y cada lista se recorre una vez"],
-       ["Hierholzer", "O(V + E)", "cada arista se marca usada una vez; el puntero siguiente[v] solo avanza, "
-                                  "así que en total se revisan 2E incidencias; hay E+1 push y E+1 pop"],
-       ["Memoria", "O(V + E)", "listas de adyacencia, arreglo usada[], pila y ciclo"],
-       ["Fleury (comparación)", "O(E²)", "antes de cada paso verifica si la arista es puente"]], [3.3, 2.4, 10])
-parrafo("El punto clave es no volver a examinar aristas ya usadas: sin el puntero siguiente[v], cada consulta "
-        "recorrería la lista desde el principio y el peor caso sería O(V·E). Con él, el algoritmo es lineal "
-        "en el tamaño del grafo, que es óptimo porque la salida misma tiene E+1 vértices.")
-parrafo("Caso borde / peor caso: si el grafo no es euleriano (Königsberg o un grafo desconectado), la "
-        "verificación lo detecta en O(V + E) y Hierholzer no se ejecuta. Si no hay aristas, la respuesta es el "
-        "ciclo trivial de un vértice.")
+doc.add_page_break()
+doc.add_heading("4. Herramientas, reproducción y contribuciones", 1)
+tabla([["Herramienta", "Uso"],
+       ["C++17 · g++ (MSYS2 UCRT64)", "Algoritmo, pruebas y generación de trazas"],
+       ["Python 3.13 + Manim Community 0.21", "Escenas animadas (animacion/escena.py)"],
+       ["FFmpeg", "Codificación de los MP4"],
+       ["Git + GitHub", "Control de versiones y entrega"]], [6.5, 9.4])
+parrafo([("Pasos para reproducir: ", True), ("(en Windows, .\\ejecutar.ps1 hace todo)", False)])
+bloque("g++ -std=c++17 -O2 -o euler src/main.cpp src/GrafoEuleriano.cpp\n"
+       "./euler grafos/principal.txt -t trazas/principal.txt\n"
+       "manim -qh animacion/escena.py Portada Introduccion Verificacion Hierholzer CasoBorde Complejidad Creditos")
+if len(INTEGRANTES) == 1:
+    filas = [["Integrante", "Contribución"],
+             [INTEGRANTES[0], "Trabajo individual (100 %): implementación en C++, pruebas, animación en Manim, "
+                              "video, informe y presentación"]]
+else:
+    filas = [["Integrante", "Contribución"]] + [[n, "—"] for n in INTEGRANTES]
+tabla(filas, [6.0, 9.9])
 
 # ------------------------------------------------------------------ 5
 doc.add_heading("5. Evidencia", 1)
-p = parrafo("Repositorio: ")
-enlace(p, REPO)
-p = parrafo("Escenas animadas con Manim (MP4, 1080p): ")
-enlace(p, REPO + "/tree/main/video")
-parrafo("Video final narrado (PPT + escenas): [AGREGAR ENLACE DE DRIVE / YOUTUBE NO LISTADO]",
-        negrita=True, color=RGBColor(0xC0, 0x30, 0x30))
-imagen("verificacion.png", "Figura 1. Verificación de grados (g) y DFS de conexidad sobre el grafo principal.")
-imagen("hierholzer_medio.png", "Figura 2. Hierholzer a mitad de ejecución: camino actual en amarillo, aristas ya "
-                               "fijadas en el ciclo en verde, pila a la derecha y ciclo en construcción abajo.")
-imagen("hierholzer_final.png", "Figura 3. Ciclo final 0→1→2→3→4→5→6→4→2→0 con el orden de cada arista.")
-imagen("konigsberg.png", "Figura 4. Caso borde: los puentes de Königsberg tienen 4 vértices de grado impar.")
-imagen("desconectado.png", "Figura 5. Caso borde: grados pares pero aristas en dos componentes.")
+imagen("verificacion.png", "Figura 1. Verificación de grados y DFS de conexidad sobre el grafo principal (escena Verificacion).")
+imagen("hierholzer_medio.png", "Figura 2. Hierholzer a mitad de ejecución: camino actual en amarillo, pila a la "
+                               "derecha y ciclo en construcción abajo (escena Hierholzer).")
+imagen("konigsberg.png", "Figura 3. Caso borde: los puentes de Königsberg tienen 4 vértices de grado impar (escena CasoBorde).")
+parrafo([("Salida del programa en consola:", True)], espacio=4)
+bloque("Grafo: 7 vertices, 9 aristas\n"
+       "Grados: 0:2 1:2 2:4 3:2 4:4 5:2 6:2\n"
+       "Ciclo euleriano (10 vertices, 9 aristas):\n"
+       "  0 -> 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 4 -> 2 -> 0")
+parrafo([("Pruebas automáticas: ", True),
+         ("se generaron 3000 multigrafos eulerianos aleatorios (el ciclo debe ser cerrado, tener E + 1 vértices y "
+          "usar cada arista una sola vez) y 3000 grafos cualesquiera cuyo veredicto se comparó con un chequeo "
+          "independiente basado en union-find.", False)])
+bloque("12591 verificaciones, 0 fallos")
+parrafo([("Casos borde considerados: ", True),
+         ("un solo vértice sin aristas (ciclo trivial), un lazo, aristas paralelas, una sola arista (grados "
+          "impares), grafo desconectado con grados pares y un ciclo de 200 000 vértices (la versión iterativa no "
+          "desborda la pila de llamadas).", False)])
 
 # ------------------------------------------------------------------ 6
-doc.add_heading("6. Contribuciones", 1)
-filas = [["Integrante", "Contribución"]]
-if len(INTEGRANTES) == 1:
-    filas.append([INTEGRANTES[0], "Trabajo individual: implementación en C++ (Pila, Lista, GrafoEuleriano, "
-                                  "Hierholzer), pruebas, animación en Manim, video narrado, informe, "
-                                  "presentación y README (100 %)"])
-else:
-    roles = ["Implementación en C++ (Pila, Lista, GrafoEuleriano, Hierholzer) y pruebas",
-             "Animación en Manim, guion y edición del video",
-             "Informe, presentación y README"]
-    for i, n in enumerate(INTEGRANTES):
-        filas.append([n, roles[i] if i < len(roles) else "Revisión general"])
-tabla(filas, [6, 9.5])
+doc.add_heading("6. Conclusiones", 1)
+vinetas([("Decidir es barato. ", "La existencia del ciclo depende solo de la paridad de los grados y de la "
+                                 "conexidad, ambas verificables en O(V + E) sin buscar el ciclo."),
+         ("La pila hace el trabajo de empalmar. ", "Hierholzer guarda el camino actual en la pila y fija en el ciclo "
+                                                  "los vértices que se atascan; así los sub-ciclos se unen solos y "
+                                                  "el costo es lineal, frente a O(E²) de Fleury."),
+         ("No revisar dos veces una arista es la clave. ", "Sin el arreglo usada[] y el puntero siguiente[v], el "
+                                                          "peor caso subiría a O(V·E)."),
+         ("La versión iterativa es más robusta. ", "Con estructuras propias evita el desbordamiento de la pila de "
+                                                   "llamadas en grafos grandes."),
+         ("Animar a partir de una traza separa la lógica de la visualización", ".")], numeradas=True)
 
 # ------------------------------------------------------------------ 7
-doc.add_heading("7. Conclusiones", 1)
+doc.add_heading("7. Referencias", 1)
 vinetas([
-    "La existencia de un ciclo euleriano se decide solo con dos propiedades locales/globales baratas "
-    "(paridad de grados y conexidad), ambas verificables en O(V + E), sin necesidad de buscar el ciclo.",
-    "Hierholzer construye el ciclo en tiempo lineal porque nunca revisa dos veces una arista: la pila guarda "
-    "el camino actual y los vértices que se atascan se van fijando en el ciclo, lo que empalma los sub-ciclos "
-    "automáticamente. Fleury, en cambio, cuesta O(E²).",
-    "Separar la lógica (C++) de la visualización (Manim) mediante una traza de eventos garantiza que la "
-    "animación muestre la ejecución real y permite reutilizar el mismo visualizador con cualquier grafo.",
-    "La versión iterativa con estructuras propias evita el desbordamiento de la pila de llamadas en grafos "
-    "grandes (probado con 200 000 aristas) y soporta multigrafos con lazos y aristas paralelas.",
-])
-
-# ------------------------------------------------------------------ 8
-doc.add_heading("Referencias", 1)
-vinetas([
-    "Hierholzer, C. & Wiener, C. (1873). Über die Möglichkeit, einen Linienzug ohne Wiederholung und ohne "
+    "Hierholzer, C. y Wiener, C. (1873). Über die Möglichkeit, einen Linienzug ohne Wiederholung und ohne "
     "Unterbrechung zu umfahren. Mathematische Annalen, 6(1), 30–32.",
-    "Euler, L. (1741). Solutio problematis ad geometriam situs pertinentis. Commentarii academiae scientiarum Petropolitanae, 8, 128–140.",
-    "Cormen, T., Leiserson, C., Rivest, R. & Stein, C. (2022). Introduction to Algorithms (4.ª ed.). MIT Press.",
+    "Euler, L. (1741). Solutio problematis ad geometriam situs pertinentis. Commentarii academiae scientiarum "
+    "Petropolitanae, 8, 128–140.",
+    "Cormen, T. H., Leiserson, C. E., Rivest, R. L. y Stein, C. (2022). Introduction to Algorithms (4.ª ed.). MIT Press.",
     "cp-algorithms. Finding the Eulerian path in O(M). https://cp-algorithms.com/graph/euler_path.html",
-    "Manim Community Developers. Manim Community v0.21. https://www.manim.community — estilo inspirado en 3Blue1Brown.",
+    "The Manim Community Developers. Manim – Mathematical Animation Framework. https://www.manim.community",
 ])
-
-# ------------------------------------------------------------------ Anexo
-ARCHIVOS_CODIGO = [
-    ("src/estructuras/Pila.h", "Pila enlazada propia (usada por Hierholzer y por el DFS de conexidad)."),
-    ("src/estructuras/Lista.h", "Lista enlazada propia (listas de adyacencia y ciclo resultante)."),
-    ("src/GrafoEuleriano.h", "Interfaz del TDA GrafoEuleriano."),
-    ("src/GrafoEuleriano.cpp", "Verificación del teorema de Euler, Hierholzer iterativo y escritura de la traza."),
-    ("src/main.cpp", "Programa de línea de comandos."),
-    ("tests/pruebas.cpp", "Pruebas aleatorias y de casos borde."),
-    ("animacion/escena.py", "Escenas de Manim que leen la traza generada por el C++."),
-    ("ejecutar.ps1", "Script que compila, prueba, genera las trazas y renderiza las escenas."),
-]
-
-
-def bloque_codigo(texto):
-    t = doc.add_table(rows=1, cols=1)
-    t.alignment = WD_TABLE_ALIGNMENT.CENTER
-    celda = t.rows[0].cells[0]
-    celda.width = Cm(16.2)
-    sombrear(celda, "F4F6F8")
-    p = celda.paragraphs[0]
-    p.paragraph_format.space_after = Pt(0)
-    p.paragraph_format.line_spacing = 1.0
-    r = p.add_run(texto.expandtabs(4).rstrip())
-    r.font.name = "Consolas"
-    r._element.rPr.rFonts.set(qn("w:eastAsia"), "Consolas")
-    r.font.size = Pt(7.5)
-    doc.add_paragraph().paragraph_format.space_after = Pt(2)
-
-
-doc.add_page_break()
-doc.add_heading("Anexo A. Código fuente", 1)
-parrafo("Código completo del proyecto, idéntico al del archivo .zip entregado en Gradescope. Ninguna "
-        "estructura proviene de bibliotecas: la pila y la lista son implementaciones propias.")
-p = parrafo("Repositorio: ")
-enlace(p, REPO)
-for ruta, desc in ARCHIVOS_CODIGO:
-    doc.add_heading(ruta, 2)
-    parrafo(desc, italica=True, color=GRIS, espacio=3)
-    with open(os.path.join(RAIZ, ruta), encoding="utf-8") as f:
-        bloque_codigo(f.read())
 
 doc.save(SALIDA)
 print("Informe generado:", SALIDA)
