@@ -306,5 +306,46 @@ vinetas([
     "Manim Community Developers. Manim Community v0.21. https://www.manim.community — estilo inspirado en 3Blue1Brown.",
 ])
 
+# ------------------------------------------------------------------ Anexo
+ARCHIVOS_CODIGO = [
+    ("src/estructuras/Pila.h", "Pila enlazada propia (usada por Hierholzer y por el DFS de conexidad)."),
+    ("src/estructuras/Lista.h", "Lista enlazada propia (listas de adyacencia y ciclo resultante)."),
+    ("src/GrafoEuleriano.h", "Interfaz del TDA GrafoEuleriano."),
+    ("src/GrafoEuleriano.cpp", "Verificación del teorema de Euler, Hierholzer iterativo y escritura de la traza."),
+    ("src/main.cpp", "Programa de línea de comandos."),
+    ("tests/pruebas.cpp", "Pruebas aleatorias y de casos borde."),
+    ("animacion/escena.py", "Escenas de Manim que leen la traza generada por el C++."),
+    ("ejecutar.ps1", "Script que compila, prueba, genera las trazas y renderiza las escenas."),
+]
+
+
+def bloque_codigo(texto):
+    t = doc.add_table(rows=1, cols=1)
+    t.alignment = WD_TABLE_ALIGNMENT.CENTER
+    celda = t.rows[0].cells[0]
+    celda.width = Cm(16.2)
+    sombrear(celda, "F4F6F8")
+    p = celda.paragraphs[0]
+    p.paragraph_format.space_after = Pt(0)
+    p.paragraph_format.line_spacing = 1.0
+    r = p.add_run(texto.expandtabs(4).rstrip())
+    r.font.name = "Consolas"
+    r._element.rPr.rFonts.set(qn("w:eastAsia"), "Consolas")
+    r.font.size = Pt(7.5)
+    doc.add_paragraph().paragraph_format.space_after = Pt(2)
+
+
+doc.add_page_break()
+doc.add_heading("Anexo A. Código fuente", 1)
+parrafo("Código completo del proyecto, idéntico al del archivo .zip entregado en Gradescope. Ninguna "
+        "estructura proviene de bibliotecas: la pila y la lista son implementaciones propias.")
+p = parrafo("Repositorio: ")
+enlace(p, REPO)
+for ruta, desc in ARCHIVOS_CODIGO:
+    doc.add_heading(ruta, 2)
+    parrafo(desc, italica=True, color=GRIS, espacio=3)
+    with open(os.path.join(RAIZ, ruta), encoding="utf-8") as f:
+        bloque_codigo(f.read())
+
 doc.save(SALIDA)
 print("Informe generado:", SALIDA)
