@@ -1,5 +1,5 @@
-# Compila el C++, genera las trazas reales, renderiza todas las escenas con Manim
-# y las une en un solo video: video/CicloEuleriano.mp4
+# Compila el C++, corre las pruebas, genera las trazas reales y renderiza
+# cada escena de Manim en la carpeta video/
 #   .\ejecutar.ps1            -> 1080p60 (calidad final)
 #   .\ejecutar.ps1 -Calidad l -> 480p15 (rapido, para probar)
 param(
@@ -16,12 +16,8 @@ $ucrtBin = 'C:\msys64\ucrt64\bin'
 if (Test-Path (Join-Path $ucrtBin 'g++.exe')) { $env:Path = "$ucrtBin;$env:Path" }
 
 if (-not $Manim) {
-    $candidatos = @(
-        (Join-Path $raiz '.venv-manim\Scripts\manim.exe'),
-        (Join-Path $raiz '..\suffix-tree-aed\.venv-manim313\Scripts\manim.exe')
-    )
-    $Manim = ($candidatos | Where-Object { Test-Path $_ } | Select-Object -First 1)
-    if (-not $Manim) { $Manim = 'manim' }
+    $local = Join-Path $raiz '.venv-manim\Scripts\manim.exe'
+    $Manim = if (Test-Path $local) { $local } else { 'manim' }
 }
 
 Write-Host 'Compilando...' -ForegroundColor Cyan
@@ -44,9 +40,5 @@ foreach ($e in $escenas) { & $Manim "-q$Calidad" animacion\escena.py $e }
 
 $carpeta = @{ l = '480p15'; m = '720p30'; h = '1080p60' }[$Calidad]
 New-Item -ItemType Directory -Force video | Out-Null
-$lista = Join-Path $raiz 'video\lista.txt'
-$escenas | ForEach-Object { "file '../media/videos/escena/$carpeta/$_.mp4'" } | Set-Content -Encoding ascii $lista
-& ffmpeg -y -v error -f concat -safe 0 -i $lista -c copy video\CicloEuleriano.mp4
-Remove-Item $lista
 Copy-Item "media\videos\escena\$carpeta\*.mp4" video\ -Force
-Write-Host 'Listo: video\CicloEuleriano.mp4 (y cada escena por separado en video\)' -ForegroundColor Green
+Write-Host 'Listo: cada escena esta en la carpeta video\' -ForegroundColor Green

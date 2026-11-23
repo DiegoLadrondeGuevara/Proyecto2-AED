@@ -19,7 +19,7 @@ SALIDA = os.path.join(RAIZ, "docs", "Informe_Ciclo_Euleriano.docx")
 REPO = "https://github.com/DiegoLadrondeGuevara/Proyecto2-AED"
 ESCENAS = REPO + "/tree/main/video"
 # Enlace al video narrado (Drive / YouTube no listado). Si queda vacío se marca en rojo.
-VIDEO_URL = ""
+VIDEO_URL = "https://drive.google.com/file/d/103c2ffegqvUGhTvNSGfAEIh1FJ5nVPyn/view?usp=sharing"
 
 with open(os.path.join(RAIZ, "integrantes.txt"), encoding="utf-8") as f:
     INTEGRANTES = [l.strip() for l in f if l.strip()]
@@ -241,7 +241,7 @@ for i, txt in enumerate(["Integrante" if len(INTEGRANTES) == 1 else "Integrantes
     r.bold = True
     fuente(r, PORTADA)
     r.font.size = Pt(11)
-for _ in range(4):
+for _ in range(3):
     doc.add_paragraph()
 linea_portada([("Lima - Perú", True)], 11)
 linea_portada([("2026", True)], 11, 0)

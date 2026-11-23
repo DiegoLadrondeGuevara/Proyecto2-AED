@@ -8,7 +8,7 @@ pruebas
 media/
 __pycache__/
 .venv*/
-node_modules/
-presentacion/package-lock.json
 entrega/
 *.zip
+video/CicloEuleriano.mp4
+video/lista.txt

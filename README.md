@@ -8,7 +8,11 @@ programa (la animación lee una traza de eventos generada por el C++; no calcula
 >
 > **Integrante:** Diego Abraham Ladrón de Guevara
 
-**Escenas animadas (mini videos, 1080p):** carpeta [`video/`](video/) — una por escena (`Portada`, `Introduccion`, `Verificacion`, `Hierholzer`, `CasoBorde`, `Complejidad`, `Creditos`); se usan dentro de la presentación narrada.
+**Video narrado:** https://drive.google.com/file/d/103c2ffegqvUGhTvNSGfAEIh1FJ5nVPyn/view?usp=sharing
+
+**Escenas animadas (1080p):** carpeta [`video/`](video/), una por escena (`Portada`, `Introduccion`, `Verificacion`, `Hierholzer`, `CasoBorde`, `Complejidad`, `Creditos`).
+
+**Informe:** [`docs/Informe_Ciclo_Euleriano.pdf`](docs/Informe_Ciclo_Euleriano.pdf)
 
 ## ¿Qué hay en el repo?
 
@@ -20,15 +24,15 @@ src/
   GrafoEuleriano.h/.cpp multigrafo no dirigido, verificación del teorema de Euler,
                         Hierholzer iterativo y escritura de la traza
   main.cpp              programa de línea de comandos
-tests/pruebas.cpp       12 000+ verificaciones contra un chequeo independiente
+tests/pruebas.cpp       12 591 verificaciones contra un chequeo independiente
 grafos/                 instancias: principal, konigsberg, desconectado, un_vertice
 trazas/                 trazas generadas por el C++ (las lee la animación)
 animacion/escena.py     escenas de Manim
 integrantes.txt         nombres que aparecen en la portada y créditos del video
-ejecutar.ps1            compila, prueba, genera trazas, renderiza y une el video
-video/                  video final y escenas por separado (.mp4)
-docs/                   informe (PDF/DOCX), guion del video e imágenes
-presentacion/           PPT para la exposición y su generador
+ejecutar.ps1            compila, prueba, genera trazas y renderiza las escenas
+video/                  escenas renderizadas (.mp4)
+docs/                   informe (PDF/DOCX) e imágenes
+tools/generar_informe.py genera el informe
 ```
 
 ## 1. Compilar y ejecutar el C++
@@ -88,8 +92,7 @@ pip install manim
 manim -qh animacion/escena.py Portada Introduccion Verificacion Hierholzer CasoBorde Complejidad Creditos
 ```
 
-O todo de una vez en Windows (compila, prueba, genera trazas, renderiza a 1080p y une las escenas en
-`video/CicloEuleriano.mp4`):
+O todo de una vez en Windows (compila, prueba, genera trazas y deja cada escena a 1080p en `video/`):
 
 ```powershell
 .\ejecutar.ps1            # calidad final (1080p60)
